@@ -22,22 +22,60 @@ class _WidgetWatcherState extends State<WidgetWatcher> {
   @override
   void initState() {
     super.initState();
+    traverseAndMonitorWidgets();
+  }
 
-    WidgetDescription widgetFound = WidgetDescription(
-      type: WidgetType.touchable,
-      position: Offset.zero,
-      size: Size.zero,
-    );
+  void traverseAndMonitorWidgets() {
+    WidgetsBinding.instance?.addPostFrameCallback((_) {
+      List<WidgetDescription> widgetsFound = [];
 
-    // TASK: Listen to widgets here (or anywhere besides the UI files) and pass it to the widget monitor service
-    //
-    // NON-NEGOTIABLE IMPLEMENTATION RULES:
-    // 1. Widgets should be added as they appear in the widget tree (tap "get started button to add and remove widgets")
-    // 2. No code to be added in any of the UI files (this code will eventually be used in a package)
-    // 2. The same widget should not be added twice
-    // 3. We want to get the position, size and type of widget
-    // 4. We should detect all tappable widgets, all input/text fields, all scrollable widgets
+      void traverse(Element element) {
+        final widget = element.widget;
+        final renderObject = element.renderObject;
 
-    widgetMonitorService.addWidget(widgetFound);
+        if (widget is GestureDetector || widget is InkWell) {
+          final position = renderObject?.getTransformTo(null)?.getTranslation();
+          final size = renderObject?.semanticBounds.size;
+          if (position != null && size != null) {
+            widgetsFound.add(WidgetDescription(
+              type: WidgetType.touchable,
+              position: Offset(position.x, position.y),
+              size: Size(size.width, size.height),
+            ));
+          }
+        } else if (widget is SingleChildScrollView ||
+            widget is ListView ||
+            widget is GridView) {
+          final position = renderObject?.getTransformTo(null)?.getTranslation();
+          final size = renderObject?.semanticBounds.size;
+          if (position != null && size != null) {
+            widgetsFound.add(WidgetDescription(
+              type: WidgetType.scrollable,
+              position: Offset(position.x, position.y),
+              size: Size(size.width, size.height),
+            ));
+          }
+        } else if (widget is TextField || widget is Focus) {
+          final position = renderObject?.getTransformTo(null)?.getTranslation();
+          final size = renderObject?.semanticBounds.size;
+          if (position != null && size != null) {
+            widgetsFound.add(WidgetDescription(
+              type: WidgetType.input,
+              position: Offset(position.x, position.y),
+              size: Size(size.width, size.height),
+            ));
+          }
+        }
+
+        element.visitChildren(traverse);
+      }
+
+      WidgetsBinding.instance?.renderViewElement?.visitChildren(traverse);
+
+      // Add unique widgets found to the widget monitor service
+      widgetsFound.toSet().forEach((widget) {
+        widgetMonitorService.addWidget(widget);
+      });
+    });
   }
 }
