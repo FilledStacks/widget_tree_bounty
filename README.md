@@ -34,5 +34,6 @@ We have a model called `WidgetDescription` which is what needs to be populated
 
 ### Expected Results
 
-- 7 Widgets are found
+- 7 Widgets are found on the first view
 - The last 2 should only be found when "Get Started" is tapped
+- When you navigate to the next view (enter any valid email and password) it should find 1 tappable widget on that screen
