@@ -1,4 +1,4 @@
-# Widget Tree Reader
+# Widget Tree Reader - [Bounty Claimed 🎉](https://github.com/FilledStacks/widget_tree_bounty/pull/2)
 
 [Bounty hosted by Ticket Stacker](https://ticketstacker.substack.com/)
 
