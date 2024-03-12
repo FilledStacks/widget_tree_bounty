@@ -4,7 +4,7 @@ import 'package:example/models/widget_description.dart';
 import 'package:example/services/widget_monitor_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:stacked_services/stacked_services.dart';
+import 'package:flutter/scheduler.dart';
 
 class WidgetWatcher extends StatefulWidget {
   final Widget child;
@@ -15,27 +15,36 @@ class WidgetWatcher extends StatefulWidget {
   State<WidgetWatcher> createState() => _WidgetWatcherState();
 }
 
-class _WidgetWatcherState extends State<WidgetWatcher> {
+class _WidgetWatcherState extends State<WidgetWatcher>
+    with SingleTickerProviderStateMixin {
   final widgetMonitorService = locator<WidgetMonitorService>();
 
   /// A set of element IDs that have already been scanned.
   final Set<int> _scannedElementIds = {};
 
-  @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
+  /// A ticker that scans the widget tree at every frame.
+  late final Ticker _ticker;
 
   @override
   void initState() {
     super.initState();
-    _scanWidgetTree();
+    _setupPeriodicScanner();
+  }
+
+  /// Sets up a periodic scanner that scans the widget tree at every frame.
+  /// This helps listen to changes in the widget tree or the navigation stack,
+  /// and updates the widget monitor accordingly.
+  void _setupPeriodicScanner() {
+    _ticker = this.createTicker((_) {
+      _scanWidgetTree();
+    });
+
+    _ticker.start();
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scanWidgetTree();
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 
   void _scanWidgetTree() {
@@ -57,20 +66,24 @@ class _WidgetWatcherState extends State<WidgetWatcher> {
     if (!_scannedElementIds.contains(elementId)) {
       _scannedElementIds.add(elementId);
 
-      final renderBox = element.findRenderObject() as RenderBox?;
-      if (renderBox != null && renderBox.hasSize) {
-        final Offset position = renderBox.localToGlobal(Offset.zero);
-        final Size size = renderBox.size;
+      final renderObject = element.findRenderObject();
+
+      // Check whether it is renderbox and is visible on UI for interaction
+      if (renderObject case RenderBox(hasSize: true)
+          when !renderObject.paintBounds.isEmpty) {
+        final Offset position = renderObject.localToGlobal(Offset.zero);
+        final Size size = renderObject.size;
 
         // Check the widget type
         WidgetType? type;
-        if (element.widget is GestureDetector || element.widget is InkWell) {
+        if (element.widget is GestureDetector) {
           type = WidgetType.touchable;
-        } else if (element.widget is ScrollView ||
-            element.widget is Scrollable) {
+        } else if (element.widget is ListView ||
+            element.widget is SingleChildScrollView ||
+            element.widget is GridView ||
+            element.widget is CustomScrollView) {
           type = WidgetType.scrollable;
         } else if (element.widget is TextField ||
-            element.widget is TextFormField ||
             element.widget is CupertinoTextField) {
           type = WidgetType.input;
         }
@@ -84,9 +97,15 @@ class _WidgetWatcherState extends State<WidgetWatcher> {
           widgetMonitorService.addWidget(widgetFound);
         }
       }
-
-      // Recurse to children
-      element.visitChildren(_recursiveVisitor);
     }
+
+    // Recurse to children
+    element.visitChildren(_recursiveVisitor);
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
   }
 }
